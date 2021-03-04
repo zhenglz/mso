@@ -116,6 +116,7 @@ def heavy_atom_count(mol):
     Number of heavy atoms in molecule
     """
     hac = Chem.Descriptors.HeavyAtomCount(mol)
+    print("heavy atom count {}".format(hac))
     return hac
 
 
@@ -123,6 +124,7 @@ def heavy_atom_count(mol):
 def molecular_weight(mol):
     """molecular weight"""
     mw = Chem.Descriptors.MolWt(mol)
+    print("molecular weight {}".format(mw))
     return mw
 
 @check_valid_mol
@@ -236,7 +238,9 @@ def has_chembl_substruct(mol):
 
 
 @check_valid_mol
-def docking_score(mol, receptor="receptor.pdbqt", exe="vina", pocket=[], size=[15, 15, 15], verbose=True, iter_ndx=0):
+def docking_score(mol, receptor="receptor.pdbqt", exe="vina", pocket=[], 
+                  size=[15, 15, 15], verbose=True, iter_ndx=0, 
+                  output_dir="/tmp/mso"):
     score = 0.0
 
     # number of heavy atoms
@@ -252,7 +256,7 @@ def docking_score(mol, receptor="receptor.pdbqt", exe="vina", pocket=[], size=[1
     # AllChem.ComputeGasteigerCharges(mol)
 
     # mol to pdb file
-    temp_dir = "/tmp/mso/{}_{}".format(str(uuid.uuid4().hex)[:8], iter_ndx)
+    temp_dir = "{}/{}_{}".format(output_dir, str(uuid.uuid4().hex)[:8], iter_ndx)
     temp_ligand_pdb = os.path.join(temp_dir, "ligand.pdb")
     os.makedirs(temp_dir, exist_ok=True) 
     Chem.MolToPDBFile(mol, temp_ligand_pdb)
@@ -279,14 +283,17 @@ def docking_score(mol, receptor="receptor.pdbqt", exe="vina", pocket=[], size=[1
 
     # read scores
     df = pd.read_csv(os.path.join(temp_dir, "result/log.csv"), header=0)
-    score = df.values[:, -2][0]
+    score = df.values[:, -1][0]
 
-    if score > 0:
+    if score < 0:
         return 0.0
     else:
+        '''
         _fitness = -1. * score / 20.0   #(score / (1. * n_ha)) / -1.0
         if _fitness > 1.0:
-            _fitness = 1.0
+            _fitness = 1.0'''
+        
+        _fitness = score / 10.0
 
         if verbose:
             print("Num_HA: {} and docking score {} and final score {}".format(n_ha, score, _fitness))

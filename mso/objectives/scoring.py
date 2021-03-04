@@ -96,6 +96,7 @@ class ScoringFunction:
                                         pocket=self.additional_args['pocket'], 
                                         verbose=self.additional_args['verbose'],
                                         size = [15, 15, 15], iter_ndx=i, 
+                                        output_dir=self.additional_args['output_dir'],
                                         )
                     except:
                         _score = 0.0

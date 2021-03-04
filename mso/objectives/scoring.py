@@ -86,7 +86,27 @@ class ScoringFunction:
                 curve.
         """
         if self.is_mol_func:
-            unscaled_scores = np.array([self.func(mol) for mol in input])
+            if self.name == "docking":
+                unscaled_scores = []
+                #print(input)
+                for i, mol in enumerate(input):
+                    try:
+                        _score = self.func(mol, receptor=self.additional_args['receptor'], 
+                                        exe = self.additional_args['exe'], 
+                                        pocket=self.additional_args['pocket'], 
+                                        verbose=self.additional_args['verbose'],
+                                        size = [15, 15, 15], iter_ndx=i, 
+                                        )
+                    except:
+                        _score = 0.0
+                        print("Warning: docking failed ")
+
+                    print("total mols {}: docking progress {} with score {:4f}".format(len(input), i, _score))
+                    unscaled_scores.append(_score)
+                unscaled_scores = np.array(unscaled_scores)
+                
+            else:
+                unscaled_scores = np.array([self.func(mol) for mol in input])
         else:
             if self.name == "distance":
                 unscaled_scores = self.func(input, target=self.additional_args['target'])

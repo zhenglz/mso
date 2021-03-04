@@ -191,7 +191,7 @@ class VinaDocking(object):
         self.output = None
 
     def vina_config(self, receptor, ligand, outname,
-                    n_cpus, exhaustiveness, center,
+                    center,n_cpus=1, exhaustiveness=8, 
                     boxsize=[30, 30, 30], logfile="log.log",
                     n_modes=1, config="vina.config"):
         self.config = config

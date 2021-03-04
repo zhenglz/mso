@@ -125,6 +125,17 @@ def molecular_weight(mol):
     mw = Chem.Descriptors.MolWt(mol)
     return mw
 
+@check_valid_mol
+def penalize_molecular_weight(mol):
+    """molecular weight"""
+    mw = Chem.Descriptors.MolWt(mol)
+
+    if mw > 1000:
+        return 0.
+    else:
+        return (1000. - mw) / 1000.
+
+
 
 @check_valid_mol
 def penalize_long_aliphatic_chains(mol, min_members):
@@ -225,36 +236,58 @@ def has_chembl_substruct(mol):
 
 
 @check_valid_mol
-def docking_score(mol, receptor="receptor.pdbqt", exe="vina", pocket=[], size=[15, 15, 15],):
+def docking_score(mol, receptor="receptor.pdbqt", exe="vina", pocket=[], size=[15, 15, 15], verbose=True, iter_ndx=0):
     score = 0.0
 
     # number of heavy atoms
-    n_ha = Chem.GetNumHeavyAtoms(mol)
+    n_ha = mol.GetNumHeavyAtoms()
+
+    # sanitize molecule
+    Chem.SanitizeMol(mol)
+    # generate 3d conformation
+    AllChem.EmbedMolecule(mol)
+    # Optimize 3d conformation
+    AllChem.MMFFOptimizeMolecule(mol)
+    # calculate mol charge
+    # AllChem.ComputeGasteigerCharges(mol)
 
     # mol to pdb file
-    temp_dir = "/tmp/mso/{}".format(str(uuid.uuid4().hex)[:8])
+    temp_dir = "/tmp/mso/{}_{}".format(str(uuid.uuid4().hex)[:8], iter_ndx)
     temp_ligand_pdb = os.path.join(temp_dir, "ligand.pdb")
     os.makedirs(temp_dir, exist_ok=True) 
-    Chem.Mol2PDBFile(mol, temp_ligand_pdb)
+    Chem.MolToPDBFile(mol, temp_ligand_pdb)
+    if verbose:
+        print("pdb file {}".format(temp_ligand_pdb))
 
     # pdb to pdbqt
     temp_ligand_pdbqt = os.path.join(temp_dir, "ligand.pdbqt")
     cmd = "obabel {} -O {}".format(temp_ligand_pdb, temp_ligand_pdbqt)
+    job = sp.Popen(cmd, shell=True)
+    job.communicate()
+    if verbose:
+        print("pdbqt file {}".format(temp_ligand_pdbqt))
 
     # docking
     from mso.objectives.idock import VinaDocking
     docking = VinaDocking(exe)
-    docking.vina_config(receptor, temp_ligand_pdbqt, temp_dir + "/result.pdbqt", 
+    docking.vina_config(receptor, temp_ligand_pdbqt, temp_dir + "/result", 
                         center=pocket, boxsize=size, config=os.path.join(temp_dir, "config.docking"))
+    if verbose:
+        print("receptor {}".format(receptor))
+        print("pocket", pocket)
     docking.run_docking()
 
     # read scores
-    df = pd.read_csv(os.path.join(temp_dir, "log.csv"), header=0)
-    score = df.values[:, -1][0]
+    df = pd.read_csv(os.path.join(temp_dir, "result/log.csv"), header=0)
+    score = df.values[:, -2][0]
 
     if score > 0:
         return 0.0
     else:
-        _fitness = score / (1. * n_ha)
-        print("Num_HA: {} and docking score {} and final score {}".format(n_ha, score, _fitness))
+        _fitness = -1. * score / 20.0   #(score / (1. * n_ha)) / -1.0
+        if _fitness > 1.0:
+            _fitness = 1.0
+
+        if verbose:
+            print("Num_HA: {} and docking score {} and final score {}".format(n_ha, score, _fitness))
         return _fitness

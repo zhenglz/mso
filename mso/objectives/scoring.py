@@ -12,7 +12,7 @@ class ScoringFunction:
     in the particle swarm.
     """
     def __init__(self, func, name, description=None, desirability=None, truncate_left=True,
-                 truncate_right=True, weight=100, is_mol_func=False):
+                 truncate_right=True, weight=100, is_mol_func=False, additional_args={}):
         """
         :param func: A function that takes either a single RDKit mol object as input or an array
             of particle positions (num_particles, ndim) in the CDDD space as input and outputs a
@@ -44,6 +44,8 @@ class ScoringFunction:
             self._desirability,
             truncate_left=truncate_left,
             truncate_right=truncate_right)
+        
+        self.additional_args = additional_args
 
     def _create_desirability_function(self, desirability, truncate_left=True, truncate_right=True):
         """
@@ -86,7 +88,11 @@ class ScoringFunction:
         if self.is_mol_func:
             unscaled_scores = np.array([self.func(mol) for mol in input])
         else:
-            unscaled_scores = self.func(input)
+            if self.name == "distance":
+                unscaled_scores = self.func(input, target=self.additional_args['target'])
+            else:
+                unscaled_scores = self.func(input)
+
         desirability_scores = self.desirability_function(unscaled_scores)
         scaled_scores = desirability_scores * self.weight
 

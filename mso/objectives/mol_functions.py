@@ -11,6 +11,8 @@ from rdkit import Chem
 from rdkit.Chem import Descriptors, AllChem
 from rdkit.Chem.Descriptors import qed, MolLogP
 from rdkit import DataStructs
+import uuid
+import subprocess as sp
 
 
 smarts = pd.read_csv(os.path.join(data_dir, "sure_chembl_alerts.txt"), header=None, sep='\t')[1].tolist()
@@ -220,3 +222,39 @@ def has_chembl_substruct(mol):
         return 0
     else:
         return 1
+
+
+@check_valid_mol
+def docking_score(mol, receptor="receptor.pdbqt", exe="vina", pocket=[], size=[15, 15, 15],):
+    score = 0.0
+
+    # number of heavy atoms
+    n_ha = Chem.GetNumHeavyAtoms(mol)
+
+    # mol to pdb file
+    temp_dir = "/tmp/mso/{}".format(str(uuid.uuid4().hex)[:8])
+    temp_ligand_pdb = os.path.join(temp_dir, "ligand.pdb")
+    os.makedirs(temp_dir, exist_ok=True) 
+    Chem.Mol2PDBFile(mol, temp_ligand_pdb)
+
+    # pdb to pdbqt
+    temp_ligand_pdbqt = os.path.join(temp_dir, "ligand.pdbqt")
+    cmd = "obabel {} -O {}".format(temp_ligand_pdb, temp_ligand_pdbqt)
+
+    # docking
+    from mso.objectives.idock import VinaDocking
+    docking = VinaDocking(exe)
+    docking.vina_config(receptor, temp_ligand_pdbqt, temp_dir + "/result.pdbqt", 
+                        center=pocket, boxsize=size, config=os.path.join(temp_dir, "config.docking"))
+    docking.run_docking()
+
+    # read scores
+    df = pd.read_csv(os.path.join(temp_dir, "log.csv"), header=0)
+    score = df.values[:, -1][0]
+
+    if score > 0:
+        return 0.0
+    else:
+        _fitness = score / (1. * n_ha)
+        print("Num_HA: {} and docking score {} and final score {}".format(n_ha, score, _fitness))
+        return _fitness
